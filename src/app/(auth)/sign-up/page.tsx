@@ -24,13 +24,12 @@ import { useRouter } from "next/navigation";
 import { signUpSchema } from "@/schemas/signUpSchema";
 
 export default function SignUpForm() {
-  const [username, setUsername] = useState("");
   const [usernameMessage, setUsernameMessage] = useState("");
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const debouncedUsername = useDebounceValue(username, 300);
+  // const debouncedUsername = useDebounceValue(username, 300);
 
-  const router = useRouter();
+  // const router = useRouter();
   //   const { toast } = useToast();
 
   const form = useForm<z.infer<typeof signUpSchema>>({
@@ -42,27 +41,34 @@ export default function SignUpForm() {
     },
   });
 
+  const router = useRouter();
+
+  // 👇 Use form's internal state to track username
+  const watchedUsername = form.watch("username");
+  const [debouncedUsername] = useDebounceValue(watchedUsername, 300);
+
   useEffect(() => {
     const checkUsernameUnique = async () => {
-      // if (!debouncedUsername || debouncedUsername.length < 3) return;
-      if (debouncedUsername) {
-        setIsCheckingUsername(true);
-        setUsernameMessage(""); // Reset message
-        try {
-          const response = await axios.get<ApiResponse>(
-            `/api/check-username-unique?username=${debouncedUsername}`
-          );
-          setUsernameMessage(response.data.message);
-        } catch (error) {
-          const axiosError = error as AxiosError<ApiResponse>;
-          setUsernameMessage(
-            axiosError.response?.data.message ?? "Error checking username"
-          );
-        } finally {
-          setIsCheckingUsername(false);
-        }
+      if (!debouncedUsername || debouncedUsername.length < 3) return;
+
+      setIsCheckingUsername(true);
+      setUsernameMessage("");
+
+      try {
+        const response = await axios.get<ApiResponse>(
+          `/api/check-username-unique?username=${debouncedUsername}`
+        );
+        setUsernameMessage(response.data.message);
+      } catch (error) {
+        const axiosError = error as AxiosError<ApiResponse>;
+        setUsernameMessage(
+          axiosError.response?.data.message ?? "Error checking username"
+        );
+      } finally {
+        setIsCheckingUsername(false);
       }
     };
+
     checkUsernameUnique();
   }, [debouncedUsername]);
 
@@ -71,30 +77,21 @@ export default function SignUpForm() {
     try {
       const response = await axios.post<ApiResponse>("/api/sign-up", data);
 
-      toast("Success", {
-        // title: "Success",
+      toast.success("Success", {
         description: response.data.message,
       });
 
       router.replace(`/verify/${data.username}`);
-
-      setIsSubmitting(false);
     } catch (error) {
-      console.error("Error during sign-up:", error);
-
       const axiosError = error as AxiosError<ApiResponse>;
-
-      // Default error message
       const errorMessage =
         axiosError.response?.data.message ??
         "There was a problem with your sign-up. Please try again.";
 
-      toast("Sign Up Failes", {
-        // title: "Sign Up Failed",
+      toast.error("Sign Up Failed", {
         description: errorMessage,
-        // variant: "destructive",
       });
-
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -116,17 +113,13 @@ export default function SignUpForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Username</FormLabel>
-                  <Input
-                    {...field}
-                    onChange={(e) => {
-                      field.onChange(e);
-                      setUsername(e.target.value);
-                    }}
-                  />
-                  {isCheckingUsername && <Loader2 className="animate-spin" />}
+                  <Input {...field} />
+                  {isCheckingUsername && (
+                    <Loader2 className="animate-spin h-4 w-4 mt-1 text-gray-500" />
+                  )}
                   {!isCheckingUsername && usernameMessage && (
                     <p
-                      className={`text-sm ${
+                      className={`text-sm mt-1 ${
                         usernameMessage === "Username is unique"
                           ? "text-green-500"
                           : "text-red-500"
@@ -139,14 +132,15 @@ export default function SignUpForm() {
                 </FormItem>
               )}
             />
+
             <FormField
               name="email"
               control={form.control}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
-                  <Input {...field} name="email" />
-                  <p className=" text-gray-400 text-sm">
+                  <Input {...field} />
+                  <p className="text-gray-400 text-sm">
                     We will send you a verification code
                   </p>
                   <FormMessage />
@@ -160,12 +154,17 @@ export default function SignUpForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password</FormLabel>
-                  <Input type="password" {...field} name="password" />
+                  <Input type="password" {...field} />
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
+
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isSubmitting || isCheckingUsername}
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -177,6 +176,7 @@ export default function SignUpForm() {
             </Button>
           </form>
         </Form>
+
         <div className="text-center mt-4">
           <p>
             Already a member?{" "}
